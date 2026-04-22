@@ -185,20 +185,21 @@ chmod +x deploy-dir885l.sh
 
 ### 3. What happens
 
-The script runs 9 phases:
+The script runs 10 phases:
 
 1. **Init** — Loads `.env`, validates all required variables, checks local files, verifies firmware integrity
 2. **Connect & Discover** — Tests SSH, reads radio hardware paths, detects IP changes
-3. **Packages** — Installs OpenNDS (and ACME if HTTPS enabled)
+3. **Packages** — Upgrades system packages, installs dnsmasq‑full, OpenNDS, usteer (and ACME if HTTPS enabled)
 3b. **Firmware** — Backs up and replaces BCM4366B 5GHz radio firmware (skips if already patched)
 4. **Backup** — Backs up all `/etc/config/` files to `/tmp/owlred-backup-<timestamp>/`
 5. **Template & Deploy** — Substitutes `%%VARIABLES%%` in config templates, SCPs to router
 6. **Portal Files** — Deploys ThemeSpec, CSS, images, CGI, symlinks
 7. **Apply** — Restarts services (handles IP change with reboot + reconnect)
+7b. **Band Steering** — Configures usteer and reloads WiFi
 8. **HTTPS** — Issues Let's Encrypt certs via Cloudflare DNS-01 (if configured)
 9. **Verify** — Checks all services, prints summary with URLs and rollback instructions
 
-**If the router IP changes** (e.g., factory 192.168.1.1 → 10.10.10.1), the script automatically reboots the router and reconnects at the new IP.
+**If the router IP changes** (e.g., factory 192.168.1.1 → 10.10.20.1), the script automatically reboots the router and reconnects at the new IP.
 
 ---
 
@@ -229,6 +230,7 @@ If `CF_TOKEN` is not set in `.env`, all HTTPS setup is skipped.
 | robots only | 2.4GHz only | IoT | No | IoT devices, internet access |
 
 > **Note:** The 5GHz BCM4366B radio only supports 1 virtual AP (brcmfmac driver limitation). The 5GHz slot is reserved for LAN.
+> **Band steering:** The deploy script enables `usteer` for the LAN SSID so dual‑band clients prefer 5GHz when signal allows.
 
 ---
 

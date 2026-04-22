@@ -344,6 +344,15 @@ phase2_packages() {
 		log_ok "opennds already installed."
 	fi
 
+	# usteer (band steering)
+	if ! run_ssh "apk list -I 2>/dev/null | grep -q '^usteer-'"; then
+		log_info "Installing usteer (band steering) ..."
+		run_ssh "apk add usteer" 2>&1 | tail -3
+		log_ok "usteer installed."
+	else
+		log_ok "usteer already installed."
+	fi
+
 	# ACME (only if Cloudflare token provided)
 	if [ -n "$CF_TOKEN" ]; then
 		if ! run_ssh "apk list -I 2>/dev/null | grep -q '^acme-'"; then
@@ -634,6 +643,41 @@ phase6_apply() {
 }
 
 ###############################################################################
+# Phase 6b: Band Steering (usteer)
+###############################################################################
+phase6b_usteer() {
+	log_step "Phase 6b: Band Steering (usteer)"
+
+	# Configure usteer defaults
+	run_ssh "cat > /etc/config/usteer << 'EOF'
+config usteer
+	option network 'lan'
+	option band_steering_threshold '-70'
+	option load_balancing_threshold '75'
+	option signal_diff_threshold '10'
+	option initial_connect_delay '0'
+	option roam_kick_delay '100'
+	option min_connect_snr '0'
+	option min_snr_kick_delay '5'
+
+config defaults 'defaults'
+	option node_up_script '/usr/share/usteer/node-up.sh'
+EOF"
+
+	# Enable usteer on LAN interfaces only (both bands)
+	run_ssh "
+		uci set wireless.wifinet_lan_2g.usteer='1'
+		uci set wireless.wifinet_lan_5g.usteer='1'
+		uci commit wireless
+	"
+
+	run_ssh "service usteer enable; service usteer restart" 2>/dev/null || true
+	run_ssh "wifi reload" 2>/dev/null || true
+
+	log_ok "usteer configured and running."
+}
+
+###############################################################################
 # Phase 7: HTTPS (optional — requires CF_TOKEN)
 ###############################################################################
 phase7_https() {
@@ -864,5 +908,6 @@ phase3b_firmware
 phase4_configs
 phase5_portal
 phase6_apply
+phase6b_usteer
 phase7_https
 phase8_verify
