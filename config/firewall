@@ -1,0 +1,107 @@
+# /etc/config/firewall — Zone, forwarding, and rule config for D-Link DIR-885L
+# Deployed to /etc/config/firewall after variable substitution
+
+config defaults
+	option syn_flood '1'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'DROP'
+
+# --- Zones ---
+
+config zone 'lan'
+	option name 'lan'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+	list network 'lan'
+
+config zone 'wan'
+	option name 'wan'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'DROP'
+	option masq '1'
+	option mtu_fix '1'
+	list network 'wan'
+	list network 'wan6'
+
+config zone 'guest'
+	option name 'guest'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+	list network 'guest'
+
+config zone 'iot'
+	option name 'iot'
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+	list network 'iot'
+
+# --- Forwarding ---
+
+config forwarding
+	option src 'lan'
+	option dest 'wan'
+
+config forwarding
+	option src 'guest'
+	option dest 'wan'
+
+config forwarding
+	option src 'lan'
+	option dest 'iot'
+
+config forwarding
+	option src 'iot'
+	option dest 'wan'
+
+config forwarding
+	option src 'guest'
+	option dest 'iot'
+
+# --- Traffic rules ---
+
+config rule 'guest_dhcp'
+	option name 'Allow-Guest-DHCP'
+	option src 'guest'
+	option proto 'udp'
+	option dest_port '67'
+	option target 'ACCEPT'
+
+config rule 'guest_dns'
+	option name 'Allow-Guest-DNS'
+	option src 'guest'
+	option proto 'tcp udp'
+	option dest_port '53'
+	option target 'ACCEPT'
+
+config rule 'iot_dhcp'
+	option name 'Allow-IoT-DHCP'
+	option src 'iot'
+	option proto 'udp'
+	option dest_port '67'
+	option target 'ACCEPT'
+
+config rule 'iot_dns'
+	option name 'Allow-IoT-DNS'
+	option src 'iot'
+	option proto 'tcp udp'
+	option dest_port '53'
+	option target 'ACCEPT'
+
+config rule 'wan_icmp'
+	option name 'Allow-WAN-Ping'
+	option src 'wan'
+	option proto 'icmp'
+	option icmp_type 'echo-request'
+	option limit '1/sec'
+	option target 'ACCEPT'
+
+# --- OpenNDS firewall include ---
+
+config include 'opennds'
+	option path '/usr/lib/opennds/restart.sh'
+	option fw4_compatible '1'

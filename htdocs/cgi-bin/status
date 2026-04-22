@@ -1,0 +1,201 @@
+#!/bin/sh
+# owl.red HTTPS Status Page — CGI script for uhttpd
+# Queries ndsctl for client session info based on REMOTE_ADDR
+# Busybox ash compatible
+
+clientip="$REMOTE_ADDR"
+
+# Parse query string for advanced toggle
+advanced=""
+case "$QUERY_STRING" in
+  *advanced=checked*) advanced="checked" ;;
+esac
+
+# Output HTTP header
+echo "Content-Type: text/html"
+echo "Cache-Control: no-cache, no-store, must-revalidate"
+echo ""
+
+# Query ndsctl for client info
+param_str=""
+ndsstatus="unavailable"
+version=""
+
+if [ -n "$clientip" ]; then
+  param_str=$(ndsctl json "$clientip" 2>/dev/null)
+  if [ -n "$param_str" ]; then
+    if echo "$param_str" | grep -q '"ip"'; then
+      ndsstatus="ready"
+    fi
+  fi
+fi
+
+# Also get version from ndsctl status
+version=$(ndsctl status 2>/dev/null | grep "Version:" | awk '{print $2}')
+if [ -z "$version" ]; then
+  version="unknown"
+fi
+
+# Extract a string value from ndsctl JSON output
+get_val() {
+  local key="$1"
+  local val
+  val=$(echo "$param_str" | grep "\"$key\":" | head -1 | sed 's/.*: *"//;s/".*//')
+  if [ -z "$val" ] || [ "$val" = "null" ]; then
+    echo "Unavailable"
+  else
+    echo "$val"
+  fi
+}
+
+if [ "$ndsstatus" = "ready" ]; then
+  ip=$(get_val ip)
+  mac=$(get_val mac)
+  client_type=$(get_val client_type)
+  clientif=$(get_val clientif)
+  session_start=$(get_val session_start)
+  session_end=$(get_val session_end)
+  last_active=$(get_val last_active)
+  state=$(get_val state)
+  upload_rate_limit_threshold=$(get_val upload_rate_limit_threshold)
+  download_rate_limit_threshold=$(get_val download_rate_limit_threshold)
+  upload_packet_rate=$(get_val upload_packet_rate)
+  upload_bucket_size=$(get_val upload_bucket_size)
+  download_packet_rate=$(get_val download_packet_rate)
+  download_bucket_size=$(get_val download_bucket_size)
+  upload_quota=$(get_val upload_quota)
+  download_quota=$(get_val download_quota)
+  upload_this_session=$(get_val upload_this_session)
+  download_this_session=$(get_val download_this_session)
+  upload_session_avg=$(get_val upload_session_avg)
+  download_session_avg=$(get_val download_session_avg)
+
+  sessionstart=$(date -d @"$session_start" 2>/dev/null || echo "$session_start")
+  if [ "$session_end" = "Unavailable" ]; then
+    sessionend="Unlimited"
+  else
+    sessionend=$(date -d @"$session_end" 2>/dev/null || echo "$session_end")
+  fi
+  lastactive=$(date -d @"$last_active" 2>/dev/null || echo "$last_active")
+
+  if [ "$upload_rate_limit_threshold" = "Unavailable" ] || [ "$upload_packet_rate" = "Unavailable" ]; then
+    upload_packet_rate="N/A"
+    upload_bucket_size="N/A"
+  fi
+  if [ "$download_rate_limit_threshold" = "Unavailable" ] || [ "$download_packet_rate" = "Unavailable" ]; then
+    download_packet_rate="N/A"
+    download_bucket_size="N/A"
+  fi
+fi
+
+# --- HTML output ---
+cat << HTMLEOF
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>owl.red — Session Status</title>
+<style>
+body{background:#1e1e2e;color:#cdd6f4;font-family:sans-serif;margin:0;padding:0}
+.offset{max-width:640px;margin:0 auto;padding:16px}
+.insert{background:#313244;border-radius:12px;padding:20px;margin:10px 0}
+input[type=submit],input[type=button]{background:#89b4fa;color:#1e1e2e;border:none;padding:12px 24px;border-radius:8px;font-size:1em;font-weight:bold;cursor:pointer;margin:6px 4px}
+hr{border:none;border-top:1px solid #585b70;margin:16px 0}
+img{max-width:100%;height:auto;border-radius:8px}
+.secure-badge{display:inline-block;background:#a6e3a1;color:#1e1e2e;padding:4px 12px;border-radius:20px;font-size:0.75em;font-weight:bold;margin-left:8px}
+</style>
+</head>
+<body>
+<div class="offset">
+<div class="insert" style="max-width:100%;">
+<div style="text-align:center;">
+<img src="/images/welcome-owl.jpg" alt="Welcome" style="max-width:200px;border-radius:12px;margin-bottom:12px;">
+</div>
+<h2 style="color:#cba6f7;text-align:center;margin:0 0 4px 0;">owl.red guest<span class="secure-badge">🔒 HTTPS</span></h2>
+<p style="color:#89b4fa;text-align:center;font-size:0.9em;margin:0 0 12px 0;">Secure Session Status</p>
+<hr>
+HTMLEOF
+
+if [ "$ndsstatus" != "ready" ]; then
+  cat << HTMLEOF
+<p style="color:#f9e2af;text-align:center;">No active session found for your device.</p>
+<p style="color:#a6adc8;text-align:center;font-size:0.85em;">Connect to <strong>owl.red guest</strong> and accept the portal terms first.</p>
+<div style="text-align:center;margin:16px 0;">
+<form><input type="button" value="Refresh" onClick="location.reload();return true;"></form>
+</div>
+HTMLEOF
+else
+  cat << HTMLEOF
+<div style="text-align:center;margin-bottom:12px;">
+<form action="/cgi-bin/status" method="get" style="display:inline;">
+<input type="submit" value="Refresh" style="margin-top:4px;">
+</form>
+</div>
+<form action="/cgi-bin/status" method="get" style="text-align:center;margin-bottom:16px;">
+<label style="font-size:0.85em;color:#a6adc8;cursor:pointer;">
+<input type="checkbox" value="checked" name="advanced" $advanced style="accent-color:#89b4fa;" onchange="this.form.submit();">
+Show advanced details
+</label>
+</form>
+<hr>
+HTMLEOF
+
+  if [ "$advanced" = "checked" ]; then
+    cat << HTMLEOF
+<div style="font-size:0.82em;line-height:2;">
+<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 14px;">
+<span style="color:#89b4fa;font-weight:bold;">IP Address</span><span>$ip</span>
+<span style="color:#89b4fa;font-weight:bold;">MAC Address</span><span>$mac</span>
+<span style="color:#89b4fa;font-weight:bold;">Client Type</span><span>$client_type</span>
+<span style="color:#89b4fa;font-weight:bold;">Interface</span><span>$clientif</span>
+<span style="color:#89b4fa;font-weight:bold;">Session Start</span><span>$sessionstart</span>
+<span style="color:#89b4fa;font-weight:bold;">Session End</span><span>$sessionend</span>
+<span style="color:#89b4fa;font-weight:bold;">Last Active</span><span>$lastactive</span>
+</div>
+<hr>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 14px;">
+<span style="color:#89b4fa;font-weight:bold;">Download Limit</span><span>$download_rate_limit_threshold Kb/s</span>
+<span style="color:#89b4fa;font-weight:bold;">Download Rate</span><span>$download_packet_rate pkt/min</span>
+<span style="color:#89b4fa;font-weight:bold;">Download Bucket</span><span>$download_bucket_size pkts</span>
+<span style="color:#89b4fa;font-weight:bold;">Upload Limit</span><span>$upload_rate_limit_threshold Kb/s</span>
+<span style="color:#89b4fa;font-weight:bold;">Upload Rate</span><span>$upload_packet_rate pkt/min</span>
+<span style="color:#89b4fa;font-weight:bold;">Upload Bucket</span><span>$upload_bucket_size pkts</span>
+</div>
+<hr>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 14px;">
+<span style="color:#89b4fa;font-weight:bold;">Download Quota</span><span>$download_quota KB</span>
+<span style="color:#89b4fa;font-weight:bold;">Upload Quota</span><span>$upload_quota KB</span>
+<span style="color:#89b4fa;font-weight:bold;">Downloaded</span><span>$download_this_session KB</span>
+<span style="color:#89b4fa;font-weight:bold;">Uploaded</span><span>$upload_this_session KB</span>
+<span style="color:#89b4fa;font-weight:bold;">Avg Download</span><span>$download_session_avg Kb/s</span>
+<span style="color:#89b4fa;font-weight:bold;">Avg Upload</span><span>$upload_session_avg Kb/s</span>
+</div>
+</div>
+HTMLEOF
+  else
+    cat << HTMLEOF
+<div style="font-size:0.85em;line-height:2;">
+<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 14px;">
+<span style="color:#89b4fa;font-weight:bold;">IP Address</span><span>$ip</span>
+<span style="color:#89b4fa;font-weight:bold;">MAC Address</span><span>$mac</span>
+<span style="color:#89b4fa;font-weight:bold;">Session Start</span><span>$sessionstart</span>
+<span style="color:#89b4fa;font-weight:bold;">Session End</span><span>$sessionend</span>
+<span style="color:#89b4fa;font-weight:bold;">Downloaded</span><span>$download_this_session KB</span>
+<span style="color:#89b4fa;font-weight:bold;">Uploaded</span><span>$upload_this_session KB</span>
+<span style="color:#89b4fa;font-weight:bold;">Avg Download</span><span>$download_session_avg Kb/s</span>
+<span style="color:#89b4fa;font-weight:bold;">Avg Upload</span><span>$upload_session_avg Kb/s</span>
+</div>
+</div>
+HTMLEOF
+  fi
+fi
+
+cat << HTMLEOF
+<div style="text-align:center;font-size:0.7em;color:#585b70;margin-top:16px;">owl.red guest &mdash; openNDS $version</div>
+</div>
+</div>
+</body>
+</html>
+HTMLEOF

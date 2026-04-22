@@ -1,0 +1,56 @@
+# /etc/config/system — System, NTP, and LED config for D-Link DIR-885L
+# Deployed to /etc/config/system after variable substitution
+
+config system
+	option hostname '%%HOSTNAME%%'
+	option timezone '%%TZ_OFFSET%%'
+	option ttylogin '0'
+	option log_size '64'
+	option urandom_seed '0'
+	option zonename '%%TIMEZONE%%'
+
+config timeserver 'ntp'
+	list server '0.openwrt.pool.ntp.org'
+	list server '1.openwrt.pool.ntp.org'
+	list server '2.openwrt.pool.ntp.org'
+	list server '3.openwrt.pool.ntp.org'
+
+config led 'led_power_white'
+	option name 'Power White'
+	option sysfs 'bcm53xx:white:power'
+	option trigger 'default-on'
+
+config led 'led_power_amber'
+	option name 'Power Amber'
+	option sysfs 'bcm53xx:amber:power'
+	option trigger 'heartbeat'
+
+config led 'led_wan_white'
+	option name 'WAN Link'
+	option sysfs 'bcm53xx:white:wan'
+	option trigger 'netdev'
+	option dev 'wan'
+	option mode 'link'
+
+config led 'led_wan_amber'
+	option name 'WAN Activity'
+	option sysfs 'bcm53xx:amber:wan'
+	option trigger 'netdev'
+	option dev 'wan'
+	list mode 'tx'
+	list mode 'rx'
+
+config led 'led_2ghz'
+	option name '2.4GHz Activity'
+	option sysfs 'bcm53xx:white:2ghz'
+	option trigger 'phy0tpt'
+
+config led 'led_5ghz'
+	option name '5GHz Activity'
+	option sysfs 'bcm53xx:white:5ghz'
+	option trigger 'phy1tpt'
+
+config led 'led_usb3'
+	option name 'USB3'
+	option sysfs 'bcm53xx:white:usb3'
+	option trigger 'default-off'

@@ -1,0 +1,258 @@
+/*
+ * owl.red Guest Network — Catppuccin Mocha Theme
+ * Applied to all OpenNDS portal and status pages.
+ *
+ * Catppuccin Mocha palette reference:
+ *   Base:      #1e1e2e    Surface0:  #313244    Surface1:  #45475a
+ *   Surface2:  #585b70    Overlay0:  #6c7086    Text:      #cdd6f4
+ *   Subtext0:  #a6adc8    Subtext1:  #bac2de    Lavender:  #b4befe
+ *   Blue:      #89b4fa    Sapphire:  #74c7ec    Teal:      #94e2d5
+ *   Green:     #a6e3a1    Yellow:    #f9e2af    Peach:     #fab387
+ *   Red:       #f38ba8    Mauve:     #cba6f7    Pink:      #f5c2e7
+ *   Crust:     #11111b    Mantle:    #181825
+ */
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	background-color: #1e1e2e;
+	color: #cdd6f4;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	margin: 0;
+	padding: 0;
+	line-height: 1.5;
+	-webkit-text-size-adjust: 100%;
+}
+
+.offset {
+	max-width: 640px;
+	margin: 0 auto;
+	padding: 16px;
+}
+
+.insert {
+	background-color: #313244;
+	border-radius: 12px;
+	padding: 20px;
+	margin: 10px 0;
+}
+
+/* Default OpenNDS custom elements — kept for compatibility */
+big-red {
+	font-size: 1.4em;
+	font-weight: bold;
+	color: #cba6f7;
+	display: block;
+	text-align: center;
+	margin: 8px 0;
+}
+
+med-blue {
+	font-size: 1.1em;
+	color: #89b4fa;
+	display: block;
+	text-align: center;
+	margin: 4px 0;
+}
+
+italic-black {
+	font-style: italic;
+	color: #a6adc8;
+	display: block;
+}
+
+h1, h2, h3 {
+	color: #cba6f7;
+	margin: 12px 0;
+}
+
+h2 {
+	font-size: 1.3em;
+}
+
+p {
+	margin: 8px 0;
+	color: #bac2de;
+}
+
+a {
+	color: #89b4fa;
+	text-decoration: none;
+}
+
+a:hover {
+	color: #b4befe;
+	text-decoration: underline;
+}
+
+hr {
+	border: none;
+	border-top: 1px solid #585b70;
+	margin: 16px 0;
+}
+
+img {
+	max-width: 100%;
+	height: auto;
+	border-radius: 8px;
+}
+
+input[type="submit"],
+input[type="button"] {
+	background-color: #89b4fa;
+	color: #1e1e2e;
+	border: none;
+	padding: 12px 24px;
+	border-radius: 8px;
+	font-size: 1em;
+	font-weight: bold;
+	cursor: pointer;
+	margin: 6px 4px;
+	transition: background-color 0.15s ease;
+}
+
+input[type="submit"]:hover,
+input[type="button"]:hover {
+	background-color: #b4befe;
+}
+
+input[type="submit"]:active,
+input[type="button"]:active {
+	background-color: #74c7ec;
+}
+
+input[type="checkbox"] {
+	accent-color: #89b4fa;
+	margin-right: 6px;
+}
+
+/* owl.red portal classes */
+.owl-notice {
+	background-color: #181825;
+	border-left: 4px solid #cba6f7;
+	padding: 16px;
+	margin: 16px 0;
+	border-radius: 0 8px 8px 0;
+	font-size: 0.85em;
+	line-height: 1.7;
+	color: #bac2de;
+}
+
+.owl-header {
+	color: #cba6f7;
+	font-size: 1.3em;
+	font-weight: bold;
+	text-align: center;
+	margin: 16px 0;
+}
+
+.owl-subheader {
+	color: #89b4fa;
+	font-size: 1.05em;
+	font-weight: bold;
+	margin: 12px 0;
+}
+
+.owl-warning {
+	color: #f38ba8;
+	font-weight: bold;
+}
+
+.owl-muted {
+	color: #585b70;
+	font-size: 0.8em;
+}
+
+.owl-center {
+	text-align: center;
+}
+
+.owl-cert {
+	background-color: #181825;
+	border: 1px solid #585b70;
+	padding: 16px;
+	font-family: "Courier New", Courier, monospace;
+	font-size: 0.72em;
+	white-space: pre-wrap;
+	word-break: break-all;
+	color: #a6e3a1;
+	border-radius: 8px;
+	margin: 16px 0;
+	line-height: 1.4;
+}
+
+.owl-img-center {
+	text-align: center;
+	margin: 16px 0;
+}
+
+.owl-img-center img {
+	max-width: 300px;
+	border-radius: 12px;
+}
+
+.owl-btn-row {
+	text-align: center;
+	margin: 16px 0;
+}
+
+.owl-btn-continue {
+	background-color: #a6e3a1 !important;
+	color: #1e1e2e !important;
+	padding: 14px 32px !important;
+	font-size: 1.1em !important;
+}
+
+.owl-btn-continue:hover {
+	background-color: #94e2d5 !important;
+}
+
+.owl-btn-nav {
+	background-color: #45475a !important;
+	color: #cdd6f4 !important;
+}
+
+.owl-btn-nav:hover {
+	background-color: #585b70 !important;
+}
+
+.owl-btn-danger {
+	background-color: #f38ba8 !important;
+	color: #1e1e2e !important;
+}
+
+.owl-btn-danger:hover {
+	background-color: #eba0ac !important;
+}
+
+/* Status page */
+.owl-status-grid {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 6px 16px;
+	font-size: 0.85em;
+	padding: 8px 0;
+}
+
+.owl-status-label {
+	color: #89b4fa;
+	font-weight: bold;
+	white-space: nowrap;
+}
+
+.owl-status-value {
+	color: #cdd6f4;
+	word-break: break-word;
+}
+
+/* Footer */
+.owl-footer {
+	text-align: center;
+	font-size: 0.7em;
+	color: #585b70;
+	margin-top: 20px;
+	padding-top: 12px;
+	border-top: 1px solid #45475a;
+}

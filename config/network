@@ -1,0 +1,55 @@
+# /etc/config/network — Network interfaces for D-Link DIR-885L (DSA)
+# Deployed to /etc/config/network after variable substitution
+
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	option ipaddr '127.0.0.1'
+	option netmask '255.255.255.0'
+
+config device
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'lan1'
+	list ports 'lan2'
+	list ports 'lan3'
+	list ports 'lan4'
+
+config interface 'lan'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '10.10.10.1'
+	option netmask '255.255.255.0'
+	list dns '1.1.1.1'
+	list dns '1.0.0.1'
+
+config interface 'wan'
+	option device 'wan'
+	option proto 'dhcp'
+	option peerdns '0'
+
+config interface 'wan6'
+	option device 'wan'
+	option proto 'dhcpv6'
+
+config device
+	option name 'br-guest'
+	option type 'bridge'
+	option bridge_empty '1'
+
+config interface 'guest'
+	option device 'br-guest'
+	option proto 'static'
+	option ipaddr '10.10.30.1'
+	option netmask '255.255.255.0'
+
+config device
+	option name 'br-iot'
+	option type 'bridge'
+	option bridge_empty '1'
+
+config interface 'iot'
+	option device 'br-iot'
+	option proto 'static'
+	option ipaddr '10.10.50.1'
+	option netmask '255.255.255.0'
