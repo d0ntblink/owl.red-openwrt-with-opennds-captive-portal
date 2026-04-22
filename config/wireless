@@ -5,7 +5,7 @@ config wifi-device 'radio0'
 	option type 'mac80211'
 	option path '%%RADIO0_PATH%%'
 	option band '2g'
-	option channel 'auto'
+	option channel '1'
 	option htmode 'HT20'
 	option country '%%COUNTRY_CODE%%'
 	option disabled '0'
@@ -14,7 +14,7 @@ config wifi-device 'radio1'
 	option type 'mac80211'
 	option path '%%RADIO1_PATH%%'
 	option band '5g'
-	option channel 'auto'
+	option channel '149'
 	option htmode 'VHT80'
 	option country '%%COUNTRY_CODE%%'
 	option disabled '0'
@@ -27,6 +27,7 @@ config wifi-iface 'wifinet_lan_2g'
 	option ssid '%%LAN_SSID%%'
 	option encryption 'psk2'
 	option key '%%LAN_WIFI_KEY%%'
+	option disabled '1'
 
 config wifi-iface 'wifinet_lan_5g'
 	option device 'radio1'
@@ -47,8 +48,19 @@ config wifi-iface 'wifinet_guest_2g'
 	option key '%%GUEST_WIFI_KEY%%'
 	option isolate '1'
 
-# Note: 5GHz guest VAP removed — brcmfmac on BCM4366B only supports 1 VAP per
-# 5GHz radio. The 5GHz slot is used by the LAN SSID. Guest runs on 2.4GHz only.
+# Note: 5GHz guest VAP is commented out — brcmfmac on BCM4366B only supports
+# 1 VAP per 5GHz radio. The 5GHz slot is used by the LAN SSID. Guest runs on
+# 2.4GHz only unless you explicitly enable this block.
+#
+# config wifi-iface 'wifinet_guest_5g'
+# 	option device 'radio1'
+# 	option ifname 'guest5'
+# 	option network 'guest'
+# 	option mode 'ap'
+# 	option ssid '%%GUEST_SSID%%'
+# 	option encryption 'psk2'
+# 	option key '%%GUEST_WIFI_KEY%%'
+# 	option isolate '1'
 
 config wifi-iface 'wifinet_iot'
 	option device 'radio0'

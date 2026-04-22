@@ -225,12 +225,15 @@ If `CF_TOKEN` is not set in `.env`, all HTTPS setup is skipped.
 
 | SSID | Band | Zone | Client Isolation | Purpose |
 |------|------|------|-----------------|---------|
-| Silence of the LANs | 2.4GHz + 5GHz | LAN | No | Trusted network |
+| Silence of the LANs | 5GHz only (2.4GHz disabled) | LAN | No | Trusted network |
 | Router? I Barely Know Her | 2.4GHz only | Guest | Yes | Captive portal, internet access |
 | robots only | 2.4GHz only | IoT | No | IoT devices, internet access |
 
-> **Note:** The 5GHz BCM4366B radio only supports 1 virtual AP (brcmfmac driver limitation). The 5GHz slot is reserved for LAN.
+> **Note:** The 5GHz BCM4366B radio only supports 1 virtual AP (brcmfmac driver limitation). The 5GHz slot is reserved for LAN. The guest 5GHz block is **commented out** in `config/wireless` instead of deleted.
 > **Band steering:** The deploy script enables `usteer` for the LAN SSID so dual‑band clients prefer 5GHz when signal allows.
+> **Channel plan:** 2.4GHz is pinned to channel 1, 5GHz to channel 149 (non‑DFS) for stability and speed.
+> **Stability:** LAN 2.4GHz is disabled by default to reduce brcmfmac timeouts on the 2.4GHz radio. Re‑enable if needed:
+> `uci set wireless.wifinet_lan_2g.disabled=0; uci commit wireless; wifi reload`
 
 ---
 
