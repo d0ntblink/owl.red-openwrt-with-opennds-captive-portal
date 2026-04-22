@@ -18,7 +18,7 @@ config device
 config interface 'lan'
 	option device 'br-lan'
 	option proto 'static'
-	option ipaddr '10.10.10.1'
+	option ipaddr '%%LAN_IP%%'
 	option netmask '255.255.255.0'
 	list dns '1.1.1.1'
 	list dns '1.0.0.1'
@@ -40,7 +40,7 @@ config device
 config interface 'guest'
 	option device 'br-guest'
 	option proto 'static'
-	option ipaddr '10.10.30.1'
+	option ipaddr '%%GUEST_IP%%'
 	option netmask '255.255.255.0'
 
 config device
@@ -51,5 +51,5 @@ config device
 config interface 'iot'
 	option device 'br-iot'
 	option proto 'static'
-	option ipaddr '10.10.50.1'
+	option ipaddr '%%IOT_IP%%'
 	option netmask '255.255.255.0'

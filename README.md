@@ -26,7 +26,7 @@ Themed with [Catppuccin Mocha](https://github.com/catppuccin/catppuccin) colors.
     ┌─────┴─────┐   ┌─────┴─────┐   ┌──────┴─────┐
     │   LAN     │   │   Guest   │   │    IoT     │
     │ br-lan    │   │ br-guest  │   │  br-iot    │
-    │10.10.10/24│   │10.10.30/24│   │10.10.50/24 │
+    │10.10.20/24│   │10.10.30/24│   │10.10.40/24 │
     │ lan1-4    │   │ WiFi only │   │ WiFi only  │
     │ WiFi 2G+5G│   │ WiFi 2G+5G│   │ WiFi 2G    │
     └───────────┘   └───────────┘   └────────────┘
@@ -52,18 +52,19 @@ Themed with [Catppuccin Mocha](https://github.com/catppuccin/catppuccin) colors.
 
 | File | Deploys To | Placeholders | Purpose |
 |------|-----------|-------------|---------|
-| `config/network` | `/etc/config/network` | — | Interfaces: loopback, br-lan, wan, br-guest, br-iot |
+| `config/network` | `/etc/config/network` | `%%LAN_IP%%`, `%%GUEST_IP%%`, `%%IOT_IP%%` | Interfaces: loopback, br-lan, wan, br-guest, br-iot |
 | `config/wireless` | `/etc/config/wireless` | `%%RADIO*_PATH%%`, `%%*_SSID%%`, `%%*_WIFI_KEY%%`, `%%COUNTRY_CODE%%` | Radios + 5 SSIDs |
 | `config/firewall` | `/etc/config/firewall` | — | 4 zones, forwarding, traffic rules, OpenNDS include |
-| `config/dhcp` | `/etc/config/dhcp` | `%%DOMAIN%%` | dnsmasq, 3 DHCP pools, local DNS |
+| `config/dhcp` | `/etc/config/dhcp` | `%%DOMAIN%%`, `%%LAN_IP%%`, `%%GUEST_IP%%` | dnsmasq, 3 DHCP pools, local DNS |
 | `config/system` | `/etc/config/system` | `%%HOSTNAME%%`, `%%TZ_OFFSET%%`, `%%TIMEZONE%%` | Hostname, NTP, DIR-885L LEDs |
-| `config/uhttpd` | `/etc/config/uhttpd` | — | Luci on LAN only, guest HTTPS instance |
+| `config/uhttpd` | `/etc/config/uhttpd` | `%%LAN_IP%%`, `%%GUEST_IP%%` | Luci on LAN only, guest HTTPS instance |
 | `config/opennds` | `/etc/config/opennds` | — | OpenNDS: br-guest, ThemeSpec, status page |
 
 ### Portal Files
 
 | File | Deploys To | Purpose |
 |------|-----------|---------|
+| `firmware/brcmfmac4366b-pcie.bin` | `/lib/firmware/brcm/brcmfmac4366b-pcie.bin` | Fixed BCM4366B radio firmware (v10.10.122.45) |
 | `themespec/theme_owlred.sh` | `/usr/lib/opennds/theme_owlred.sh` | ThemeSpec: splash, privacy, security, landing pages |
 | `themespec/client_params_owlred.sh` | `/usr/lib/opennds/client_params_owlred.sh` | HTTP status page script |
 | `htdocs/splash.css` | `/etc/opennds/htdocs/splash.css` | Catppuccin Mocha CSS |
@@ -82,6 +83,9 @@ owl.red-openwrt/
 ├── .env.example                 Environment template (all variables documented)
 ├── .gitignore
 ├── .gitattributes               Enforce LF line endings
+│
+├── firmware/                    Hardware-specific firmware
+│   └── brcmfmac4366b-pcie.bin  BCM4366B 5GHz radio fix (v10.10.122.45)
 │
 ├── config/                      UCI config templates (%%VAR%% placeholders)
 │   ├── network
@@ -148,6 +152,11 @@ TIMEZONE=America/Edmonton
 TZ_OFFSET=MST7MDT,M3.2.0,M11.1.0
 COUNTRY_CODE=CA
 
+# Network IPs
+LAN_IP=10.10.20.1
+GUEST_IP=10.10.30.1
+IOT_IP=10.10.40.1
+
 # WiFi
 LAN_SSID=Silence of the LANs
 LAN_WIFI_KEY=your-lan-password
@@ -178,9 +187,10 @@ chmod +x deploy-dir885l.sh
 
 The script runs 9 phases:
 
-1. **Init** — Loads `.env`, validates all required variables, checks local files
+1. **Init** — Loads `.env`, validates all required variables, checks local files, verifies firmware integrity
 2. **Connect & Discover** — Tests SSH, reads radio hardware paths, detects IP changes
 3. **Packages** — Installs OpenNDS (and ACME if HTTPS enabled)
+3b. **Firmware** — Backs up and replaces BCM4366B 5GHz radio firmware (skips if already patched)
 4. **Backup** — Backs up all `/etc/config/` files to `/tmp/owlred-backup-<timestamp>/`
 5. **Template & Deploy** — Substitutes `%%VARIABLES%%` in config templates, SCPs to router
 6. **Portal Files** — Deploys ThemeSpec, CSS, images, CGI, symlinks
@@ -215,8 +225,10 @@ If `CF_TOKEN` is not set in `.env`, all HTTPS setup is skipped.
 | SSID | Band | Zone | Client Isolation | Purpose |
 |------|------|------|-----------------|---------|
 | Silence of the LANs | 2.4GHz + 5GHz | LAN | No | Trusted network |
-| Router? I Barely Know Her | 2.4GHz + 5GHz | Guest | Yes | Captive portal, internet access |
+| Router? I Barely Know Her | 2.4GHz only | Guest | Yes | Captive portal, internet access |
 | robots only | 2.4GHz only | IoT | No | IoT devices, internet access |
+
+> **Note:** The 5GHz BCM4366B radio only supports 1 virtual AP (brcmfmac driver limitation). The 5GHz slot is reserved for LAN.
 
 ---
 
@@ -255,7 +267,7 @@ Clean, serious page showing real OpenNDS session data (IP, MAC, session times, d
 Backups are created in `/tmp/owlred-backup-<timestamp>/` before any changes.
 
 ```bash
-ssh root@10.10.10.1
+ssh root@10.10.20.1
 ls /tmp/owlred-backup-*
 
 # Restore all configs
@@ -279,6 +291,23 @@ ssh-copy-id root@10.10.10.1
 ```
 
 Then leave `ROUTER_PASS` empty in `.env`.
+
+---
+
+## BCM4366B 5GHz Firmware Fix
+
+The stock Broadcom BCM4366B radio firmware shipped with OpenWrt 19.07+ causes 5GHz WiFi instability on the DIR-885L — clients fail to connect or drop randomly. The deploy script replaces it with a known-good version:
+
+| | Stock (broken) | Patched |
+|---|---|---|
+| Version | 10.28.2 | 10.10.122.45 |
+| Date | 2018-11-05 | 2017-05-31 |
+| Size | 1,105,361 | 1,146,907 |
+| MD5 | — | `92d1baab27d88b3ff1c9b9a39c33b0b4` |
+
+Source: [hurrian/ea9500_openwrt](https://github.com/hurrian/ea9500_openwrt/tree/master/package/brcmfmac-firmware-4366b1-pcie-panamera/files)
+
+The script verifies the firmware MD5 locally before deploy, checks it again after upload, and backs up the original. A reboot is required after replacement for the new firmware to load.
 
 ---
 
@@ -307,6 +336,7 @@ Then leave `ROUTER_PASS` empty in `.env`.
 | Can't reach Luci | Luci is bound to LAN IP only (10.10.10.1) — connect via LAN |
 | HTTPS cert failed | `logread \| grep acme`, verify CF_TOKEN permissions |
 | IoT can't reach internet | Check `iot → wan` forwarding in `fw4 print` |
+| 5GHz WiFi unstable | Verify firmware: `md5sum /lib/firmware/brcm/brcmfmac4366b-pcie.bin` should be `92d1baab...` |
 
 ---
 

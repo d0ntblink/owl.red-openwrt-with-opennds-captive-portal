@@ -41,6 +41,7 @@ log_step()  { printf "\n${BOLD}==> %s${NC}\n" "$*"; }
 
 # --- Temp-file cleanup ---
 TEMP_FILES=()
+FIRMWARE_CHANGED=false
 cleanup() {
 	for f in "${TEMP_FILES[@]}"; do
 		rm -f "$f" 2>/dev/null
@@ -57,6 +58,9 @@ DOMAIN=""
 TIMEZONE=""
 TZ_OFFSET=""
 COUNTRY_CODE=""
+LAN_IP=""
+GUEST_IP=""
+IOT_IP=""
 LAN_SSID=""
 LAN_WIFI_KEY=""
 GUEST_SSID=""
@@ -87,6 +91,9 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
 			TIMEZONE)        TIMEZONE="$value" ;;
 			TZ_OFFSET)       TZ_OFFSET="$value" ;;
 			COUNTRY_CODE)    COUNTRY_CODE="$value" ;;
+			LAN_IP)          LAN_IP="$value" ;;
+			GUEST_IP)        GUEST_IP="$value" ;;
+			IOT_IP)          IOT_IP="$value" ;;
 			LAN_SSID)        LAN_SSID="$value" ;;
 			LAN_WIFI_KEY)    LAN_WIFI_KEY="$value" ;;
 			GUEST_SSID)      GUEST_SSID="$value" ;;
@@ -120,6 +127,9 @@ MISSING=()
 [ -z "$TIMEZONE" ]       && MISSING+=("TIMEZONE")
 [ -z "$TZ_OFFSET" ]      && MISSING+=("TZ_OFFSET")
 [ -z "$COUNTRY_CODE" ]   && MISSING+=("COUNTRY_CODE")
+[ -z "$LAN_IP" ]         && MISSING+=("LAN_IP")
+[ -z "$GUEST_IP" ]       && MISSING+=("GUEST_IP")
+[ -z "$IOT_IP" ]         && MISSING+=("IOT_IP")
 [ -z "$LAN_SSID" ]       && MISSING+=("LAN_SSID")
 [ -z "$LAN_WIFI_KEY" ]   && MISSING+=("LAN_WIFI_KEY")
 [ -z "$GUEST_SSID" ]     && MISSING+=("GUEST_SSID")
@@ -186,12 +196,18 @@ REQUIRED_FILES=(
 	"config/system"
 	"config/uhttpd"
 	"config/opennds"
+	"firmware/brcmfmac4366b-pcie.bin"
 	"htdocs/splash.css"
 	"htdocs/index.html"
 	"htdocs/cgi-bin/status"
 	"themespec/theme_owlred.sh"
 	"themespec/client_params_owlred.sh"
 )
+
+# Firmware integrity check (BCM4366B 5GHz fix)
+FIRMWARE_FILE="$SCRIPT_DIR/firmware/brcmfmac4366b-pcie.bin"
+FIRMWARE_EXPECTED_MD5="92d1baab27d88b3ff1c9b9a39c33b0b4"
+FIRMWARE_EXPECTED_SIZE=1146907
 
 missing=0
 for f in "${REQUIRED_FILES[@]}"; do
@@ -212,6 +228,32 @@ if [ "$missing" -eq 1 ]; then
 fi
 
 log_ok "All local files present."
+
+# Verify firmware integrity
+if command -v md5sum >/dev/null 2>&1; then
+	ACTUAL_MD5=$(md5sum "$FIRMWARE_FILE" | awk '{print $1}')
+elif command -v md5 >/dev/null 2>&1; then
+	ACTUAL_MD5=$(md5 -q "$FIRMWARE_FILE")
+else
+	log_warn "No md5sum/md5 available — skipping firmware hash check."
+	ACTUAL_MD5="$FIRMWARE_EXPECTED_MD5"
+fi
+
+ACTUAL_SIZE=$(wc -c < "$FIRMWARE_FILE" | tr -d ' ')
+
+if [ "$ACTUAL_MD5" != "$FIRMWARE_EXPECTED_MD5" ]; then
+	log_error "Firmware MD5 mismatch!"
+	log_error "  Expected: $FIRMWARE_EXPECTED_MD5"
+	log_error "  Got:      $ACTUAL_MD5"
+	exit 1
+fi
+
+if [ "$ACTUAL_SIZE" -ne "$FIRMWARE_EXPECTED_SIZE" ]; then
+	log_error "Firmware size mismatch! Expected $FIRMWARE_EXPECTED_SIZE, got $ACTUAL_SIZE"
+	exit 1
+fi
+
+log_ok "Firmware integrity verified (MD5: ${ACTUAL_MD5:0:12}..., ${ACTUAL_SIZE} bytes)"
 
 # Warn about oversized images
 for img in "$SCRIPT_DIR"/portal/*; do
@@ -257,7 +299,7 @@ phase1_connect() {
 
 	# Detect whether deploying network config will change the router's IP
 	IP_WILL_CHANGE=false
-	TARGET_LAN_IP="10.10.10.1"
+	TARGET_LAN_IP="$LAN_IP"
 	if [ "$ROUTER_IP" != "$TARGET_LAN_IP" ]; then
 		CURRENT_LAN=$(run_ssh "uci get network.lan.ipaddr 2>/dev/null" | tr -d '\r\n' | sed 's|/.*||')
 		if [ "$CURRENT_LAN" != "$TARGET_LAN_IP" ]; then
@@ -276,6 +318,22 @@ phase2_packages() {
 	log_info "Updating package index ..."
 	run_ssh "apk update" >/dev/null 2>&1
 	log_ok "Package index updated."
+
+	# Full system upgrade BEFORE firmware fix — if done after, apk upgrade
+	# would pull back the broken stock BCM4366B firmware blob.
+	log_info "Upgrading all packages (before firmware fix) ..."
+	run_ssh "apk upgrade --no-interactive 2>&1" | tail -5
+	log_ok "System packages upgraded."
+
+	# OpenNDS requires dnsmasq-full for nftset support (captive portal redirect).
+	# Replace base dnsmasq if present.
+	if run_ssh "apk list -I 2>/dev/null | grep -q '^dnsmasq-full-'"; then
+		log_ok "dnsmasq-full already installed."
+	else
+		log_info "Replacing dnsmasq with dnsmasq-full (required for OpenNDS) ..."
+		run_ssh "apk add --force-overwrite dnsmasq-full" 2>&1 | tail -3
+		log_ok "dnsmasq-full installed."
+	fi
 
 	# OpenNDS
 	if ! run_ssh "apk list -I 2>/dev/null | grep -q '^opennds-'"; then
@@ -325,7 +383,42 @@ phase3_backup() {
 		cp -f  /www-guest/cgi-bin/status                      '$BACKUP_DIR/status.bak'                      2>/dev/null || true
 	"
 
+	# Backup radio firmware (BCM4366B)
+	run_ssh "cp -f /lib/firmware/brcm/brcmfmac4366b-pcie.bin '$BACKUP_DIR/brcmfmac4366b-pcie.bin.bak' 2>/dev/null || true"
+
 	log_ok "Backup created at $BACKUP_DIR"
+}
+
+###############################################################################
+# Phase 3b: WiFi Firmware Fix (BCM4366B — DIR-885L 5GHz fix)
+###############################################################################
+phase3b_firmware() {
+	log_step "Phase 3b: WiFi Firmware (BCM4366B 5GHz fix)"
+
+	# Check if firmware already matches
+	REMOTE_MD5=$(run_ssh "md5sum /lib/firmware/brcm/brcmfmac4366b-pcie.bin 2>/dev/null | awk '{print \$1}'" | tr -d '\r\n')
+	if [ "$REMOTE_MD5" = "$FIRMWARE_EXPECTED_MD5" ]; then
+		log_ok "Firmware already patched — skipping."
+		FIRMWARE_CHANGED=false
+		return
+	fi
+
+	log_warn "Stock BCM4366B firmware detected — replacing with known-good v10.10.122.45"
+	log_info "This fixes 5GHz association/stability issues on DIR-885L."
+
+	run_scp "$FIRMWARE_FILE" "$ROUTER_USER@$ROUTER_IP:/lib/firmware/brcm/brcmfmac4366b-pcie.bin"
+
+	# Verify upload
+	UPLOADED_MD5=$(run_ssh "md5sum /lib/firmware/brcm/brcmfmac4366b-pcie.bin | awk '{print \$1}'" | tr -d '\r\n')
+	if [ "$UPLOADED_MD5" != "$FIRMWARE_EXPECTED_MD5" ]; then
+		log_error "Firmware upload verification failed!"
+		log_error "  Expected: $FIRMWARE_EXPECTED_MD5"
+		log_error "  Got:      $UPLOADED_MD5"
+		exit 1
+	fi
+
+	FIRMWARE_CHANGED=true
+	log_ok "Firmware deployed and verified."
 }
 
 ###############################################################################
@@ -338,10 +431,14 @@ phase4_configs() {
 	local e_RADIO0_PATH e_RADIO1_PATH e_COUNTRY_CODE
 	local e_LAN_SSID e_LAN_WIFI_KEY e_GUEST_SSID e_GUEST_WIFI_KEY
 	local e_IOT_SSID e_IOT_WIFI_KEY e_HOSTNAME e_TZ_OFFSET e_TIMEZONE e_DOMAIN
+	local e_LAN_IP e_GUEST_IP e_IOT_IP
 
 	e_RADIO0_PATH=$(escape_sed "$RADIO0_PATH")
 	e_RADIO1_PATH=$(escape_sed "$RADIO1_PATH")
 	e_COUNTRY_CODE=$(escape_sed "$COUNTRY_CODE")
+	e_LAN_IP=$(escape_sed "$LAN_IP")
+	e_GUEST_IP=$(escape_sed "$GUEST_IP")
+	e_IOT_IP=$(escape_sed "$IOT_IP")
 	e_LAN_SSID=$(escape_sed "$LAN_SSID")
 	e_LAN_WIFI_KEY=$(escape_sed "$LAN_WIFI_KEY")
 	e_GUEST_SSID=$(escape_sed "$GUEST_SSID")
@@ -364,6 +461,13 @@ phase4_configs() {
 		sed -i 's/\r$//' "$tmp"
 
 		case "$cfg" in
+			network)
+				sed -i \
+					-e "s|%%LAN_IP%%|${e_LAN_IP}|g" \
+					-e "s|%%GUEST_IP%%|${e_GUEST_IP}|g" \
+					-e "s|%%IOT_IP%%|${e_IOT_IP}|g" \
+					"$tmp"
+				;;
 			wireless)
 				sed -i \
 					-e "s|%%RADIO0_PATH%%|${e_RADIO0_PATH}|g" \
@@ -378,7 +482,11 @@ phase4_configs() {
 					"$tmp"
 				;;
 			dhcp)
-				sed -i "s|%%DOMAIN%%|${e_DOMAIN}|g" "$tmp"
+				sed -i \
+					-e "s|%%DOMAIN%%|${e_DOMAIN}|g" \
+					-e "s|%%LAN_IP%%|${e_LAN_IP}|g" \
+					-e "s|%%GUEST_IP%%|${e_GUEST_IP}|g" \
+					"$tmp"
 				;;
 			system)
 				sed -i \
@@ -388,6 +496,10 @@ phase4_configs() {
 					"$tmp"
 				;;
 			uhttpd)
+				sed -i \
+					-e "s|%%LAN_IP%%|${e_LAN_IP}|g" \
+					-e "s|%%GUEST_IP%%|${e_GUEST_IP}|g" \
+					"$tmp"
 				# Strip the guest uhttpd section if HTTPS won't be configured
 				if [ -z "$CF_TOKEN" ]; then
 					sed -i "/^config uhttpd 'guest'/,\$d" "$tmp"
@@ -610,7 +722,7 @@ chmod 600 /etc/acme/cloudflare.env"
 	if run_ssh "test -f '${guest_cert_dir}/fullchain.cer'" 2>/dev/null; then
 		run_ssh "
 			uci set uhttpd.guest=uhttpd
-			uci set uhttpd.guest.listen_https='10.10.30.1:443'
+			uci set uhttpd.guest.listen_https='${GUEST_IP}:443'
 			uci set uhttpd.guest.home='/www-guest'
 			uci set uhttpd.guest.cgi_prefix='/cgi-bin'
 			uci set uhttpd.guest.max_requests='3'
@@ -692,13 +804,13 @@ phase8_verify() {
 	echo ""
 	log_step "Deployment Summary"
 	echo ""
-	printf "  ${BOLD}LAN${NC}     10.10.10.1    SSID: %s\n" "$LAN_SSID"
-	printf "          LuCI: https://10.10.10.1/\n"
+	printf "  ${BOLD}LAN${NC}     %s    SSID: %s\n" "$LAN_IP" "$LAN_SSID"
+	printf "          LuCI: https://%s/\n" "$LAN_IP"
 	echo ""
-	printf "  ${BOLD}Guest${NC}   10.10.30.1    SSID: %s\n" "$GUEST_SSID"
-	printf "          Portal: http://10.10.30.1/\n"
+	printf "  ${BOLD}Guest${NC}   %s    SSID: %s\n" "$GUEST_IP" "$GUEST_SSID"
+	printf "          Portal: http://%s/\n" "$GUEST_IP"
 	echo ""
-	printf "  ${BOLD}IoT${NC}     10.10.50.1    SSID: %s\n" "$IOT_SSID"
+	printf "  ${BOLD}IoT${NC}     %s    SSID: %s\n" "$IOT_IP" "$IOT_SSID"
 	printf "          (LAN/Guest can reach IoT, IoT has internet)\n"
 	echo ""
 
@@ -726,8 +838,14 @@ phase8_verify() {
 	for cfg in network wireless firewall dhcp system uhttpd opennds; do
 		log_info "  cp ${BACKUP_DIR}/${cfg}.bak /etc/config/${cfg}"
 	done
+	log_info "  cp ${BACKUP_DIR}/brcmfmac4366b-pcie.bin.bak /lib/firmware/brcm/brcmfmac4366b-pcie.bin"
 	log_info "  reboot"
 	echo ""
+
+	if [ "$FIRMWARE_CHANGED" = true ]; then
+		log_warn "WiFi firmware was replaced — a reboot is required for it to take effect."
+		log_warn "Run: ssh $ROUTER_USER@$ROUTER_IP 'reboot'"
+	fi
 
 	if [ "$all_ok" = true ]; then
 		log_ok "Provisioning complete. All services healthy."
@@ -742,6 +860,7 @@ phase8_verify() {
 phase1_connect
 phase2_packages
 phase3_backup
+phase3b_firmware
 phase4_configs
 phase5_portal
 phase6_apply

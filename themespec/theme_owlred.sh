@@ -120,7 +120,8 @@ main_splash_page() {
 <form action=\"/opennds_preauth/\" method=\"get\">
 <input type=\"hidden\" name=\"fas\" value=\"$fas\">
 <input type=\"hidden\" name=\"landing\" value=\"yes\">
-<input type=\"submit\" value=\"Grant Me Internet My Lord I Need to Talk to the Gods\" style=\"background:#a6e3a1;color:#1e1e2e;padding:14px 32px;font-size:1.1em;\">
+<input type=\"submit\" value=\"Grant Me Internet My Liege
+I Need to Speak with the Gods\" style=\"background:#a6e3a1;color:#1e1e2e;padding:14px 32px;font-size:1.1em;white-space:pre-line;\">
 </form>
 </div>
 "
